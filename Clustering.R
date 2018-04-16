@@ -40,13 +40,13 @@ colnames(k)[1] <- c("CustomerID")
 
 #merge two 
 
-master <- merge(k,monetory, by = 'CustomerID')
+master <- merge(monetory,k, by = 'CustomerID')
 
 
 # recency 
 str(orderwise)
 
-recency <- orderwise[,c(5,7)]
+recency <- orderwise[,c(7,5)]
 
 recency$InvoiceDate <- as.Date(recency$InvoiceDate,format = '%d-%m-%Y %H:%M')
 
@@ -66,15 +66,18 @@ str(df)
 
 #merging 3 derived metrics 
 
-RFM <- merge(df, master, by = 'CustomerID')
+RFM <- merge(monetory,k, by = 'CustomerID')
 
+RFM <- merge(RFM, df, by = 'CustomerID')
+
+RFM$recency <- as.numeric(RFM$recency)
 
 # outlier treatment
 box <- boxplot.stats(RFM$amount)
 
 out <- box$out
 
-RFM1 <- RFM[!(RFM$amount) %in% out,]
+RFM1 <- RFM[!RFM$amount %in% out,]
 
 RFM <- RFM1
 ########################
@@ -83,7 +86,7 @@ box <- boxplot.stats(RFM$Freq)
 
 out <- box$out
 
-RFM1 <- RFM[!(RFM$Freq) %in% out,]
+RFM1 <- RFM[!RFM$Freq %in% out,]
 
 RFM<- RFM1
 
@@ -93,7 +96,7 @@ box <- boxplot.stats(RFM$recency)
 
 out <- box$out
 
-RFM1 <- RFM[!(RFM$recency) %in% out,]
+RFM1 <- RFM[!RFM$recency %in% out,]
 
 RFM<- RFM1
 
@@ -104,7 +107,7 @@ RFM_norm <- RFM[,-1]
 RFM_norm <- sapply(RFM_norm, function(x) scale(x))
 
 str(RFM_norm)
-RFM_norm <- data.frame(RFM_norm)
+#RFM_norm <- data.frame(RFM_norm)
 
 
 # applying k-mean algorithm to create three clusters
@@ -174,31 +177,46 @@ plot_grid(ggplot(tab1, aes(x = factor(ClusterID), y = Mean_amount, fill = factor
 
 RFM_dist <- dist(RFM_norm)
 
-# hierarchical CLustering
+## Constructing the dendrogram using single linkage
 
-RFM_hclust <- hclust(RFM_dist,method = 'single')
+RFM_hclust1 <- hclust(RFM_dist, method = 'single')
 
-plot(RFM_hclust)
+plot(RFM_hclust1)
+ 
+## Constructing the dendrogram using complete linkage 
 
-## Visualising the cut in the dendrogram
+RFM_hclust2 <- hclust(RFM_dist, method = 'complete')
 
-rect.hclust(RFM_hclust, k=5, border="red")
+plot(RFM_hclust2)
 
-## Making the cut in the dendrogram
+# Visualising the cut in the dendogram 
 
-clusterCut <- cutree(RFM_hclust, k=5)
+# k is no of cluster cuts 
+rect.hclust(RFM_hclust2, k = 5, border = 'red')
 
-## Appending the ClusterIDs to RFM data
+# h is the cluster cut at the specific height
+rect.hclust(RFM_hclust2, h= 5, border = 'blue')
 
-RFM_hc <-cbind(RFM,clusterCut)
+# making the cut in the dendogram 
 
-colnames(RFM_hc)[5]<- "ClusterID"
+ClusterCut <- cutree(RFM_hclust2,k = 5)
 
-## Cluster Analysis
+# appending the clusterid to data frame
 
-hc_clusters<- group_by(RFM_hc, ClusterID)
+RFM_hc <- cbind(RFM, ClusterCut)
 
-tab2<- summarise(hc_clusters, Mean_amount=mean(amount), Mean_freq=mean(Freq), Mean_recency=mean(recency))
-ggplot(tab2, aes(x= factor(ClusterID), y=Mean_recency)) + geom_bar(stat = "identity")
-ggplot(tab2, aes(x= factor(ClusterID), y=Mean_amount)) + geom_bar(stat = "identity")
-ggplot(tab2, aes(x= factor(ClusterID), y=Mean_freq)) + geom_bar(stat = "identity")
+colnames(RFM_hc)[5] <- 'ClusterID'
+
+## cluster analysis
+library(dplyr)
+
+hc_clusters <- group_by(RFM_hc,ClusterID)
+
+tab2 <- summarise(hc_clusters, Mean_amount = mean(amount), 
+                  Mean_recency = mean(recency), Mean_freq = mean(Freq))
+
+library(tidyr)
+
+tab2 %>% gather(-ClusterID,key = 'var', value = 'value') %>%
+         ggplot(aes(x = factor(ClusterID), y = value, fill= factor(ClusterID))) +
+         geom_bar(stat = 'identity') + facet_wrap(~ var, scales = "free") 
