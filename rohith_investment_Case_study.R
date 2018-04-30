@@ -1,5 +1,4 @@
 getwd()
-setwd("/Users/rohithbharatha/Desktop/practice Data science/Analysis/")
 
 companies <- read.delim("companies.txt", sep = "\t",stringsAsFactors = F)
 rounds2 <- read.csv("rounds2.csv",stringsAsFactors = F)
